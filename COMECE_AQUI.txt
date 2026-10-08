@@ -1,0 +1,41 @@
+================================================================
+  BOT DE OFERTAS PARA TELEGRAM (LINUX) - COMECE AQUI
+================================================================
+
+Posta promocoes (Mercado Livre, Shopee, Amazon) no seu canal do
+Telegram com os SEUS links de afiliado.
+
+----------------------------------------------------------------
+  JEITO FACIL: PAINEL GRAFICO
+----------------------------------------------------------------
+
+  No terminal, dentro desta pasta, rode:
+
+      bash painel.sh
+
+Ele prepara tudo e abre um painel no navegador, onde voce
+configura, testa e liga/desliga o bot - sem mais comandos.
+
+Na primeira vez, se faltar o "uv", o script instala e pede para
+reabrir o terminal (ou rode: source $HOME/.local/bin/env).
+
+----------------------------------------------------------------
+  ANTES DE COMECAR
+----------------------------------------------------------------
+- Google Chrome (ou Chromium) instalado.
+- Um bot criado no @BotFather -> guarde o TOKEN.
+- Um canal no Telegram com o seu bot como ADMINISTRADOR.
+- Suas contas de afiliado (Mercado Livre / Amazon / Shopee).
+
+Passo a passo completo: veja o README.md.
+
+----------------------------------------------------------------
+  IMPORTANTE
+----------------------------------------------------------------
+- Por padrao pega oferta de TODAS as categorias (para focar num
+  nicho, edite o config.yaml - tem exemplos comentados).
+- Use as SUAS proprias contas de afiliado.
+- Avise no canal que sao links de afiliado (exigencia dos
+  programas, principalmente Amazon).
+- NUNCA compartilhe o arquivo .env (guarda suas senhas).
+================================================================

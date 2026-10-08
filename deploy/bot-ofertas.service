@@ -1,0 +1,18 @@
+[Unit]
+Description=Bot de ofertas para Telegram
+After=network-online.target
+
+[Service]
+Type=simple
+WorkingDirectory=%h/bot-ofertas-telegram-linux
+Environment=PYTHONUNBUFFERED=1
+Environment=TZ=America/Sao_Paulo
+EnvironmentFile=%h/bot-ofertas-telegram-linux/.env
+ExecCondition=%h/bot-ofertas-telegram-linux/.venv/bin/python -c "from ofertas.config import config; raise SystemExit(0 if config.bot_token else 1)"
+ExecStart=%h/bot-ofertas-telegram-linux/.venv/bin/python -m ofertas run
+Restart=on-failure
+RestartSec=15
+UMask=0077
+
+[Install]
+WantedBy=default.target
