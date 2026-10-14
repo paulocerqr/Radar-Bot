@@ -56,3 +56,29 @@ class CookiesMLTest(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
+
+
+class LinksAfiliadoMLTest(unittest.TestCase):
+    def _ofertas(self, n):
+        return [Oferta('mercadolivre', f'MLB{i}', f'P{i}', '', url_produto=f'https://ml/p/MLB{i}') for i in range(n)]
+
+    def test_failed_batch_falls_back_to_each_url(self):
+        ofertas = self._ofertas(3)
+        def criar(page, urls, tag):
+            if len(urls) > 1 or urls[0].endswith('MLB1'):
+                raise RuntimeError('createLink respondeu HTTP 500: ')
+            return ['https://meli.la/' + urls[0][-4:]]
+        erros = []
+        with patch.object(ml, '_criar_links_api', side_effect=criar):
+            gerados = ml._links_do_lote(MagicMock(), ofertas, erros)
+        self.assertEqual([o.id_produto for o in gerados], ['MLB0', 'MLB2'])
+        self.assertEqual(ofertas[1].url_afiliado, '')
+        self.assertTrue(erros)
+
+    def test_retry_recovers_whole_batch(self):
+        ofertas = self._ofertas(2)
+        criar = MagicMock(side_effect=[RuntimeError('HTTP 500'), ['https://meli.la/a', 'https://meli.la/b']])
+        with patch.object(ml, '_criar_links_api', criar):
+            gerados = ml._links_do_lote(MagicMock(), ofertas, [])
+        self.assertEqual(len(gerados), 2)
+        self.assertEqual(criar.call_count, 2)

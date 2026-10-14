@@ -122,8 +122,10 @@ async def executar_ciclo(bot: Bot) -> int:
             await asyncio.to_thread(mercadolivre.gerar_links_afiliado, ml_pendentes)
         except Exception as e:
             log.error("Linkbuilder ML falhou: %s", e)
-            if "Sessão" in str(e):
-                await avisar_dono(bot, f"⚠️ Mercado Livre parou de gerar links: {e}")
+        sem_link = sum(1 for o in ml_pendentes if not o.url_afiliado)
+        if sem_link:
+            await avisar_dono(bot, f"⚠️ Mercado Livre: {sem_link} de {len(ml_pendentes)} ofertas ficaram "
+                                   "sem link de afiliado neste ciclo (veja o log; se persistir, renove os cookies).")
 
     # categoria só para o Radar filtrar as ofertas de informática; não aparece no post
     amazon_pendentes = [o for o in escolhidas if o.plataforma == "amazon" and not o.categoria]

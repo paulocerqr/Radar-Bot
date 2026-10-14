@@ -381,6 +381,34 @@ def _preencher_da_pagina(page, ofertas: list[Oferta]) -> None:
             o.preco_original = parse_preco_br(dados["original"])
 
 
+def _links_do_lote(page, lote: list[Oferta], erros: list[str]) -> list[Oferta]:
+    """Gera os links de um lote; se o createLink falhar, tenta de novo e depois URL por URL,
+    para uma falha (HTTP 500, URL recusada) não deixar o lote inteiro sem link."""
+    for tentativa in range(2):
+        try:
+            links = _criar_links_api(page, [o.url_produto for o in lote], config.ml_etiqueta)
+        except Exception as e:
+            log.warning("Mercado Livre: createLink falhou para %d URLs (tentativa %d): %s",
+                        len(lote), tentativa + 1, e)
+            erros.append(str(e))
+            page.wait_for_timeout(3000)
+            continue
+        for o, link in zip(lote, links):
+            o.url_afiliado = link
+        return lote
+    if len(lote) == 1:
+        return []
+    gerados = []
+    for o in lote:
+        try:
+            o.url_afiliado = _criar_links_api(page, [o.url_produto], config.ml_etiqueta)[0]
+            gerados.append(o)
+        except Exception as e:
+            log.warning("Mercado Livre: sem link para '%s': %s", o.titulo[:60], e)
+            erros.append(str(e))
+    return gerados
+
+
 def gerar_links_afiliado(ofertas: list[Oferta]) -> None:
     """Preenche oferta.url_afiliado via API do Linkbuilder (lotes de 10 URLs)."""
     from playwright.sync_api import sync_playwright
@@ -403,16 +431,20 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> None:
                 raise RuntimeError("Sessão do ML expirou — rode de novo: "
                                    "uv run python -m ofertas ml-login")
             page.wait_for_timeout(1500)  # deixa os scripts de sessão da página rodarem
+            erros = []
             for i in range(0, len(pendentes), 10):
                 lote = pendentes[i:i + 10]
-                links = _criar_links_api(page, [o.url_produto for o in lote], config.ml_etiqueta)
-                for o, link in zip(lote, links):
-                    o.url_afiliado = link
+                gerados = _links_do_lote(page, lote, erros)
+                if not gerados:
+                    continue
                 try:
-                    _preencher_da_pagina(page, lote)
+                    _preencher_da_pagina(page, gerados)
                 except Exception as e:  # os dados da página são opcionais: o link já foi gerado
                     log.warning("Mercado Livre: páginas dos produtos indisponíveis: %s", e)
-            log.info("Mercado Livre: %d links de afiliado gerados", len(pendentes))
+            gerados = sum(1 for o in pendentes if o.url_afiliado)
+            log.info("Mercado Livre: %d de %d links de afiliado gerados", gerados, len(pendentes))
+            if erros and not gerados:
+                raise RuntimeError(f"nenhum link gerado ({erros[-1]})")
         finally:
             ctx.close()
 
