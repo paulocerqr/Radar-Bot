@@ -13,6 +13,7 @@ class Oferta:
     desconto_pct: int | None = None
     imagem: str | None = None
     extra: str | None = None   # avaliação, frete grátis, "no Pix" etc.
+    categoria: str | None = None  # trilha de categorias da loja; vai só para o Radar, não aparece no post
 
     @property
     def uid(self) -> str:

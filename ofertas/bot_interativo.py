@@ -9,7 +9,7 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update
 from telegram.ext import (Application, CallbackQueryHandler, CommandHandler,
                           ContextTypes, MessageHandler, filters)
 
-from . import db, pipeline
+from . import db, pipeline, radar
 from .config import config
 from .models import Oferta
 from .sources import detectar_fonte
@@ -141,8 +141,9 @@ async def _callback(update: Update, ctx: ContextTypes.DEFAULT_TYPE):
         await _status("⚠️ Essa prévia expirou — mande o link de novo.")
         return
     if acao == "post":
-        await postar_oferta(ctx.bot, oferta, config.chat_id)
+        mensagem = await postar_oferta(ctx.bot, oferta, config.chat_id)
         db.registrar(oferta)
+        await asyncio.to_thread(radar.enviar_oferta, oferta, mensagem)
         await _status("✅ Postada no canal!")
     else:
         await _status("🗑 Descartada.")

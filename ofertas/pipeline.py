@@ -4,7 +4,7 @@ import re
 
 from telegram import Bot
 
-from . import db
+from . import db, radar
 from .config import config, dentro_do_horario
 from .models import Oferta
 from .sources import amazon, mercadolivre, shopee
@@ -125,17 +125,23 @@ async def executar_ciclo(bot: Bot) -> int:
             if "Sessão" in str(e):
                 await avisar_dono(bot, f"⚠️ Mercado Livre parou de gerar links: {e}")
 
+    # categoria só para o Radar filtrar as ofertas de informática; não aparece no post
+    amazon_pendentes = [o for o in escolhidas if o.plataforma == "amazon" and not o.categoria]
+    if amazon_pendentes and radar.ativo():
+        await asyncio.to_thread(amazon.preencher_categorias, amazon_pendentes)
+
     postadas = 0
     for o in escolhidas:
         if not o.url_afiliado:
             log.warning("Sem link de afiliado, pulando: %s", o.titulo[:60])
             continue
         try:
-            await postar_oferta(bot, o, config.chat_id)
+            mensagem = await postar_oferta(bot, o, config.chat_id)
         except Exception as e:
             log.error("Falha ao postar '%s': %s", o.titulo[:60], e)
             continue
         db.registrar(o)
+        await asyncio.to_thread(radar.enviar_oferta, o, mensagem)
         postadas += 1
         if o is not escolhidas[-1]:
             await asyncio.sleep(config.espacamento_segundos)

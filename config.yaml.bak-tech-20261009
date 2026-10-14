@@ -1,0 +1,26 @@
+geral:
+  intervalo_minutos: 45
+  max_posts_por_ciclo: 25
+  espacamento_segundos: 10
+  nao_repetir_dias: 7
+  horario_ativo: 08:00-23:00
+filtros:
+  desconto_minimo: 10
+  preco_minimo: 0
+  preco_maximo: 0
+  palavras_bloqueadas: []
+fontes:
+  mercadolivre:
+    ativa: true
+    paginas: 1
+    categorias: {}
+  amazon:
+    ativa: true
+    paginas: 1
+    requisicoes_por_ciclo: 2
+    departamentos: {}
+    buscas: []
+  shopee:
+    ativa: false
+    limite: 40
+    buscas: []

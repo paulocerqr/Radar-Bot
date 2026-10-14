@@ -1,11 +1,22 @@
+import os
 import re
 
 import requests
+
+from .config import DATA_DIR
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
     "(KHTML, like Gecko) Chrome/151.0.0.0 Safari/537.36"
 )
+
+
+def ambiente_navegador() -> dict | None:
+    """Ambiente do Chromium do projeto: bibliotecas do Ubuntu extraídas em data/, sem instalação como root."""
+    libs = DATA_DIR / "browser-libs/usr/lib/x86_64-linux-gnu"
+    if not libs.is_dir():
+        return None
+    return {**os.environ, "LD_LIBRARY_PATH": str(libs) + ":" + os.getenv("LD_LIBRARY_PATH", "")}
 
 
 def sessao() -> requests.Session:

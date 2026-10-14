@@ -1,6 +1,6 @@
 import logging
 
-from telegram import Bot, InlineKeyboardButton, InlineKeyboardMarkup, Message
+from telegram import Bot, InlineKeyboardMarkup, Message
 from telegram.constants import ParseMode
 
 from .formatter import montar_caption
@@ -9,14 +9,10 @@ from .models import Oferta
 log = logging.getLogger("ofertas.poster")
 
 
-def teclado_oferta(o: Oferta) -> InlineKeyboardMarkup:
-    return InlineKeyboardMarkup([[InlineKeyboardButton("🛒 Pegar oferta", url=o.url_afiliado)]])
-
-
 async def postar_oferta(bot: Bot, oferta: Oferta, chat_id: str | int,
                         teclado: InlineKeyboardMarkup | None = None) -> Message:
     caption = montar_caption(oferta)
-    markup = teclado or teclado_oferta(oferta)
+    markup = teclado  # só a prévia no privado tem botões; o post no canal leva o link no texto
     if oferta.imagem:
         try:
             return await bot.send_photo(chat_id, oferta.imagem, caption=caption,

@@ -16,7 +16,7 @@ from bs4 import BeautifulSoup
 
 from ..config import DATA_DIR, config
 from ..models import Oferta
-from ..utils import parse_preco_br, sessao
+from ..utils import USER_AGENT, ambiente_navegador, parse_preco_br, sessao
 
 log = logging.getLogger("ofertas.amazon")
 
@@ -356,7 +356,7 @@ def converter(url: str) -> Oferta:
             motivo = "conta ainda não elegível" if "AssociateNotEligible" in str(e) else str(e)
             log.warning("Creators API indisponível (%s); usando link com tag", motivo)
 
-    titulo, preco, preco_original, imagem = _detalhes(f"https://www.amazon.com.br/dp/{asin}")
+    titulo, preco, preco_original, imagem, categoria = _detalhes(f"https://www.amazon.com.br/dp/{asin}")
     return Oferta(
         plataforma="amazon",
         id_produto=asin,
@@ -366,17 +366,66 @@ def converter(url: str) -> Oferta:
         preco=preco,
         preco_original=preco_original,
         imagem=imagem,
+        categoria=categoria,
     )
 
 
+def _categoria(soup) -> str | None:
+    """Trilha de categorias da página do produto ("Computadores e Informática > Notebooks")."""
+    trilha = [a.get_text(" ", strip=True) for a in soup.select("#wayfinding-breadcrumbs_feature_div a")]
+    return " > ".join(t for t in trilha if t) or None
+
+
+def preencher_categorias(ofertas: list[Oferta]) -> None:
+    """Categoria das ofertas escolhidas, para o Radar filtrar; para no primeiro bloqueio da Amazon."""
+    s = _sessao()
+    for o in ofertas:
+        if o.plataforma != "amazon" or o.categoria:
+            continue
+        try:
+            r = s.get(f"https://www.amazon.com.br/dp/{o.id_produto}", timeout=25)
+        except Exception as e:
+            log.warning("Amazon: categoria de %s indisponível: %s", o.id_produto, e)
+            return
+        if r.status_code != 200 or _bloqueado(r.text):
+            log.warning("Amazon bloqueou a leitura das categorias (HTTP %s)", r.status_code)
+            return
+        o.categoria = _categoria(BeautifulSoup(r.text, "lxml"))
+        time.sleep(3)  # educação com o servidor
+
+
+def _pagina_pelo_navegador(url: str) -> str | None:
+    """A página do produto lida pelo Chromium do projeto, para quando a Amazon responde com captcha à
+    requisição comum. Janela própria e sem login, para não disputar o perfil do Mercado Livre."""
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as pw:
+        browser = pw.chromium.launch(headless=True, env=ambiente_navegador(),
+                                     args=["--disable-blink-features=AutomationControlled"])
+        try:
+            page = browser.new_page(user_agent=USER_AGENT, locale="pt-BR")
+            page.goto(url, wait_until="domcontentloaded", timeout=45000)
+            page.wait_for_selector("#productTitle", timeout=15000)
+            return page.content()
+        except Exception as e:
+            log.warning("Amazon: o navegador também não abriu a página: %s", str(e).splitlines()[0][:120])
+            return None
+        finally:
+            browser.close()
+
+
 def _detalhes(url: str):
-    """Scraping leve da página do produto; se a Amazon bloquear, segue sem os dados."""
+    """Scraping leve da página do produto; se a Amazon pedir captcha, lê pelo navegador; se ainda assim
+    bloquear, segue sem os dados."""
     try:
         r = _sessao().get(url, timeout=25)
-        if r.status_code != 200 or "captcha" in r.text[:3000].lower():
-            log.warning("Amazon não liberou a página (%s) — postando sem título/preço", r.status_code)
-            return None, None, None, None
-        soup = BeautifulSoup(r.text, "lxml")
+        html = r.text
+        if r.status_code != 200 or "captcha" in html[:3000].lower():
+            html = _pagina_pelo_navegador(url)
+            if not html:
+                log.warning("Amazon não liberou a página (%s) — postando sem título/preço", r.status_code)
+                return None, None, None, None, None
+        soup = BeautifulSoup(html, "lxml")
 
         el = soup.select_one("#productTitle")
         titulo = el.get_text(strip=True) if el else None
@@ -390,7 +439,7 @@ def _detalhes(url: str):
         el = soup.select_one("#landingImage")
         imagem = (el.get("data-old-hires") or el.get("src")) if el else None
 
-        return titulo, preco, preco_original, imagem
+        return titulo, preco, preco_original, imagem, _categoria(soup)
     except Exception as e:
         log.warning("Falha ao ler detalhes na Amazon: %s", e)
-        return None, None, None, None
+        return None, None, None, None, None

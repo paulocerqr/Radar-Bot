@@ -267,6 +267,27 @@ Para reinstalar o navegador, com o serviço parado:
 Não apague o histórico nem o perfil para corrigir um erro genérico: isso pode
 permitir repetições ou remover a sessão. Consulte os logs antes de alterar dados.
 
-Na última configuração verificada, o bot estava online com a sessão validada,
-mas todas as fontes e o agendamento automático permaneciam desligados.
+Na conferência de 08/10/2026, o Mercado Livre e o agendamento estavam ativos,
+com publicações confirmadas nos logs. Consulte o registro e os valores dessa
+conferência em [RELATORIO_2026-10-08.md](RELATORIO_2026-10-08.md).
 Este guia documenta a ativação; escrever ou copiar o arquivo não ativa postagens.
+
+
+```
+geral:
+  intervalo_minutos: 45
+  max_posts_por_ciclo: 3
+  espacamento_segundos: 120
+  nao_repetir_dias: 7
+  horario_ativo: "08:00-23:00"
+```
+
+| Campo | O que significa |
+|---|---|
+| `intervalo_minutos` | Tempo entre os ciclos de busca. `45` significa executar a cada 45 minutos. `0` desliga o agendamento automático. |
+| `max_posts_por_ciclo` | Máximo de ofertas publicadas em cada ciclo. Com `3`, pode publicar até três — ou menos, se faltarem ofertas aprovadas. |
+| `espacamento_segundos` | Pausa entre as postagens do mesmo ciclo. `120` significa dois minutos. |
+| `nao_repetir_dias` | Evita que a seleção automática reposte o mesmo produto durante esse período. `7` significa sete dias. |
+| `horario_ativo` | Horário permitido para os ciclos, no fuso de Brasília. `"08:00-23:00"` permite das 08h até antes das 23h. `""` permite as 24 horas. |
+
+Nesse exemplo, o bot busca ofertas a cada 45 minutos, publica até três com dois minutos de intervalo e evita repetir produtos por sete dias. **O bot permanece online fora do horário, mas não executa os ciclos de ofertas.**

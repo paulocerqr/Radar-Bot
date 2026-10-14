@@ -7,6 +7,24 @@ from ofertas.sources import mercadolivre as ml
 from ofertas.models import Oferta
 
 
+class CollectionMLTest(unittest.TestCase):
+    def test_a_failing_page_ends_only_its_category(self):
+        client = MagicMock()
+        client.get.return_value.text = '<html></html>'
+        offer = Oferta('mercadolivre', 'MLB1', 'Mouse', '', url_produto='https://www.mercadolivre.com.br/p/MLB1')
+        def page(params):
+            if params.get('category') == 'MLB1144':
+                raise TimeoutError('Page.wait_for_selector: Timeout 15000ms exceeded.')
+            return [offer]
+        with patch.object(ml, 'sessao', return_value=client), \
+             patch.object(ml, '_categorias', return_value={'MLB1144': 'Games', 'MLB1648': 'Informática'}), \
+             patch.object(ml.config, 'fonte_ml', {'paginas': 2}), \
+             patch.object(ml, 'tem_sessao', return_value=True), \
+             patch.object(ml, '_buscar_pagina_autenticada', side_effect=page), \
+             patch.object(ml.time, 'sleep'):
+            self.assertEqual([o.id_produto for o in ml.buscar_ofertas()], ['MLB1'])
+
+
 class CookiesMLTest(unittest.TestCase):
     def test_empty_http_collection_uses_the_authenticated_browser(self):
         client = MagicMock()

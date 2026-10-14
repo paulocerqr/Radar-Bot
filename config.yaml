@@ -1,7 +1,7 @@
 geral:
   intervalo_minutos: 45
-  max_posts_por_ciclo: 10
-  espacamento_segundos: 10
+  max_posts_por_ciclo: 15
+  espacamento_segundos: 5
   nao_repetir_dias: 7
   horario_ativo: 08:00-23:00
 filtros:
@@ -12,15 +12,31 @@ filtros:
 fontes:
   mercadolivre:
     ativa: true
-    paginas: 1
-    categorias: {}
+    paginas: 2
+    categorias:
+      MLB1648: Informática
+      MLB1051: Celulares e Telefones
+      MLB1144: Games
+      MLB1000: Eletrônicos, Áudio e Vídeo
+      ? ''
+      : Todas as categorias
   amazon:
-    ativa: false
+    ativa: true
     paginas: 1
-    requisicoes_por_ciclo: 4
-    departamentos: {}
-    buscas: []
+    requisicoes_por_ciclo: 2
+    departamentos:
+      computers: Computadores e Informática
+      electronics: Eletrônicos
+      videogames: Games
+    buscas:
+    - monitor gamer
+    - mouse gamer
+    - teclado mecânico
+    - headset gamer
+    - placa de vídeo
+    - ssd nvme
+    - controle gamer
   shopee:
-    ativa: false
-    limite: 40
+    ativa: true
+    limite: 20
     buscas: []

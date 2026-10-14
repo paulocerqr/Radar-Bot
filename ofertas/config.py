@@ -41,6 +41,9 @@ class Config:
         self.ml_etiqueta: str = os.getenv("ML_ETIQUETA", "").strip()
         self.shopee_app_id: str = os.getenv("SHOPEE_APP_ID", "").strip()
         self.shopee_app_secret: str = os.getenv("SHOPEE_APP_SECRET", "").strip()
+        self.radar_api_url: str = os.getenv("RADAR_API_URL", "").strip()
+        self.radar_token: str = os.getenv("RADAR_TOKEN", "").strip()
+        self.radar_source_id: str = os.getenv("RADAR_SOURCE_ID", "").strip()
 
         # config.yaml
         self.intervalo_minutos: int = int(geral.get("intervalo_minutos", 45))

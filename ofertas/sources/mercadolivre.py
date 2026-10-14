@@ -22,7 +22,7 @@ from bs4 import BeautifulSoup
 
 from ..config import DATA_DIR, config
 from ..models import Oferta
-from ..utils import USER_AGENT, parse_preco_br, sessao
+from ..utils import USER_AGENT, ambiente_navegador, parse_preco_br, sessao
 
 log = logging.getLogger("ofertas.ml")
 
@@ -126,11 +126,15 @@ def buscar_ofertas() -> list[Oferta]:
                 params["category"] = cat_id
             if pagina > 1:
                 params["page"] = pagina
-            r = s.get(URL_OFERTAS, params=params or None, timeout=30)
-            r.raise_for_status()
-            achadas = _parse_pagina(r.text)
-            if not achadas and tem_sessao():
-                achadas = _buscar_pagina_autenticada(params)
+            try:
+                r = s.get(URL_OFERTAS, params=params or None, timeout=30)
+                r.raise_for_status()
+                achadas = _parse_pagina(r.text)
+                if not achadas and tem_sessao():
+                    achadas = _buscar_pagina_autenticada(params)
+            except Exception as e:  # uma página com erro (ou sem mais ofertas) encerra só esta categoria
+                log.warning("Mercado Livre %s, página %d: %s", nome, pagina, str(e).splitlines()[0][:120])
+                break
             for o in achadas:
                 ofertas.setdefault(o.id_produto, o)
             log.info("Mercado Livre %s: %d ofertas", nome, len(achadas))
@@ -241,10 +245,8 @@ def _abrir_contexto(pw, headless: bool):
         kwargs["user_agent"] = USER_AGENT  # o headless real se anuncia como HeadlessChrome
     else:
         kwargs["no_viewport"] = True
-    libs = DATA_DIR / "browser-libs/usr/lib/x86_64-linux-gnu"
-    if libs.is_dir():
-        # Bibliotecas do Ubuntu extraídas no projeto, sem instalação como root.
-        kwargs["env"] = {**os.environ, "LD_LIBRARY_PATH": str(libs) + ":" + os.getenv("LD_LIBRARY_PATH", "")}
+    if ambiente_navegador():
+        kwargs["env"] = ambiente_navegador()
     try:
         return pw.chromium.launch_persistent_context(str(PERFIL_DIR), **kwargs)
     except Exception as e:
@@ -347,6 +349,38 @@ def _criar_links_api(page, urls: list[str], etiqueta: str) -> list[str]:
     return links
 
 
+def _preencher_da_pagina(page, ofertas: list[Oferta]) -> None:
+    """Lê a página de cada produto na mesma página logada (fora dela o ML pede verificação de conta): a trilha
+    de categorias, que vai só para o Radar, e título, preço e foto quando a oferta ainda não os tem (links
+    colados no privado). Uma página que falhar fica sem esses dados."""
+    paginas = page.evaluate(
+        """async (urls) => Promise.all(urls.map(async (u) => {
+            try {
+                const d = new DOMParser().parseFromString(await (await fetch(u)).text(), 'text/html');
+                const q = (s) => d.querySelector(s);
+                return {
+                    categoria: [...d.querySelectorAll('.andes-breadcrumb__link')].map(a => a.textContent.trim()).join(' > '),
+                    titulo: q('h1.ui-pdp-title')?.textContent.trim() || '',
+                    imagem: q('meta[property="og:image"]')?.content || '',
+                    preco: q('meta[itemprop="price"]')?.content
+                        || q('.ui-pdp-price__second-line .andes-money-amount__fraction')?.textContent || '',
+                    original: q('s.andes-money-amount--previous .andes-money-amount__fraction')?.textContent || '',
+                };
+            } catch (e) { return {}; }
+        }))""",
+        [o.url_produto for o in ofertas],
+    )
+    for o, dados in zip(ofertas, paginas):
+        o.categoria = dados.get("categoria") or None
+        o.titulo = o.titulo or dados.get("titulo") or ""
+        # o Telegram publica foto em JPEG/PNG; o servidor de imagens do ML entrega a mesma foto em .jpg
+        o.imagem = o.imagem or re.sub(r"\.webp$", ".jpg", dados.get("imagem") or "") or None
+        if o.preco is None and dados.get("preco"):
+            o.preco = parse_preco_br(dados["preco"])
+        if o.preco_original is None and dados.get("original"):
+            o.preco_original = parse_preco_br(dados["original"])
+
+
 def gerar_links_afiliado(ofertas: list[Oferta]) -> None:
     """Preenche oferta.url_afiliado via API do Linkbuilder (lotes de 10 URLs)."""
     from playwright.sync_api import sync_playwright
@@ -374,6 +408,10 @@ def gerar_links_afiliado(ofertas: list[Oferta]) -> None:
                 links = _criar_links_api(page, [o.url_produto for o in lote], config.ml_etiqueta)
                 for o, link in zip(lote, links):
                     o.url_afiliado = link
+                try:
+                    _preencher_da_pagina(page, lote)
+                except Exception as e:  # os dados da página são opcionais: o link já foi gerado
+                    log.warning("Mercado Livre: páginas dos produtos indisponíveis: %s", e)
             log.info("Mercado Livre: %d links de afiliado gerados", len(pendentes))
         finally:
             ctx.close()
@@ -387,37 +425,17 @@ def converter(url: str) -> Oferta:
             url = sessao().get(url, allow_redirects=True, timeout=20).url.split("#")[0]
         except Exception as e:
             log.warning("Não consegui expandir o link meli.la: %s", e)
-    titulo = preco = preco_original = imagem = None
-    try:
-        r = sessao().get(url, timeout=25)
-        soup = BeautifulSoup(r.text, "lxml")
-        el = soup.select_one("h1.ui-pdp-title")
-        titulo = el.get_text(strip=True) if el else None
-        el = soup.select_one('meta[property="og:image"]')
-        imagem = el.get("content") if el else None
-        el = soup.select_one('meta[itemprop="price"]')
-        if el and el.get("content"):
-            preco = float(el["content"])
-        else:
-            el = soup.select_one(".ui-pdp-price__second-line .andes-money-amount__fraction")
-            preco = parse_preco_br(el.get_text()) if el else None
-        el = soup.select_one("s.andes-money-amount--previous .andes-money-amount__fraction")
-        preco_original = parse_preco_br(el.get_text()) if el else None
-    except Exception as e:
-        log.warning("Não consegui ler a página do produto: %s", e)
-
     m = _RE_ID.search(url)
     oferta = Oferta(
         plataforma="mercadolivre",
         id_produto=m.group(1).replace("-", "") if m else url.rstrip("/").rsplit("/", 1)[-1][:40],
-        titulo=titulo or "Oferta Mercado Livre",
+        titulo="",
         url_afiliado="",
         url_produto=url.split("?")[0],
-        preco=preco,
-        preco_original=preco_original,
-        imagem=imagem,
     )
+    # o link de afiliado e os dados da página (título, preço, foto) saem da mesma sessão logada
     gerar_links_afiliado([oferta])
     if not oferta.url_afiliado:
         raise RuntimeError("Linkbuilder não devolveu o link de afiliado")
+    oferta.titulo = oferta.titulo or "Oferta Mercado Livre"
     return oferta
